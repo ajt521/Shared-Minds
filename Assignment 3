@@ -1,1 +1,132 @@
+const replicateProxy = "https://replicate-api-proxy.glitch.me";
+let feedback;
+let selectedLanguages = []; // Array to store the selected target languages
+let originalLanguage = "English"; // Assume the original language is English for now
+
+function setup() {
+    feedback = createP(""); // Feedback element
+    let input_field = createInput("Hello"); // Input box with default text
+    input_field.id("input_prompt");
+    input_field.size(450);
+
+    createP("Select Languages to Translate Through:"); // Label for language selection
+
+    // List of 20 popular languages
+    let languages = ["Spanish", "French", "Chinese", "Japanese", "German", "Hindi", "Arabic", "Portuguese", 
+                     "Russian", "Bengali", "Korean", "Italian", "Turkish", "Vietnamese", "Polish", 
+                     "Ukrainian", "Persian", "Dutch", "Thai", "Romanian"];
+    
+    // Create buttons for each language
+    languages.forEach(function(language) {
+        let langButton = createButton(language);
+        langButton.mousePressed(function() {
+            toggleLanguageSelection(language, langButton);
+        });
+    });
+
+    let myButton = createButton("Translate"); // Button to send the translation request
+    myButton.style('background-color', '#4CAF50');
+    myButton.style('color', 'white');
+    myButton.mousePressed(function() {
+        if (selectedLanguages.length === 0) {
+            feedback.html("Please select at least one language to translate through.");
+        } else {
+            playTelephoneGame(input_field.value());
+        }
+    });
+}
+
+function draw() {
+    // Empty draw loop
+}
+
+function toggleLanguageSelection(language, button) {
+    if (selectedLanguages.indexOf(language) !== -1) {
+        // Remove language from the selection and reset button color
+        selectedLanguages = selectedLanguages.filter(function(lang) {
+            return lang !== language;
+        });
+        button.style('background-color', ''); // Reset to default button color
+    } else {
+        // Add language to the selection and darken the button
+        selectedLanguages.push(language);
+        button.style('background-color', 'grey');
+    }
+    feedback.html('Selected languages: ' + selectedLanguages.join(", "));
+}
+
+async function playTelephoneGame(p_prompt) {
+    document.body.style.cursor = "progress"; // Show loading cursor
+    feedback.html('Translating through ' + selectedLanguages.join(", ") + '...');
+
+    let translatedText = p_prompt; // Start with the original text
+
+    // Sequentially translate through the selected languages
+    for (let i = 0; i < selectedLanguages.length; i++) {
+        translatedText = await translateText(translatedText, selectedLanguages[i]);
+        if (!translatedText) {
+            feedback.html("Error during translation. Please try again.");
+            document.body.style.cursor = "auto"; // Reset cursor
+            return;
+        }
+        feedback.html('Intermediate Translation (' + selectedLanguages[i] + '): ' + translatedText);
+    }
+
+    // Finally, translate back to the original language
+    let finalTranslation = await translateText(translatedText, originalLanguage);
+    
+    if (finalTranslation) {
+        feedback.html('Final Translation (back to ' + originalLanguage + '): ' + finalTranslation);
+        createP('Translated back to ' + originalLanguage + ': ' + finalTranslation);
+    }
+
+    document.body.style.cursor = "auto"; // Reset cursor after request
+}
+
+// Function to handle the translation request
+async function translateText(text, targetLang) {
+    // Craft a precise and focused translation prompt
+    const data = {
+        "version": "35042c9a33ac8fd5e29e27fb3197f33aa483f72c2ce3b0b9d201155c7fd2a287", // API version
+        input: {
+            prompt: 'Translate this exact phrase into ' + targetLang + ' without adding anything extra or changing the meaning. Only return the pure translation of this exact phrase: "' + text + '"',
+            max_tokens: 100, // Maximum token length
+            max_length: 100, // Maximum length
+        },
+    };
+
+    console.log('Sending translation request for ' + targetLang + ':', data);
+
+    let options = {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+        },
+        body: JSON.stringify(data), // Send the data object as a JSON payload
+    };
+
+    const url = replicateProxy + "/create_n_get/"; // Proxy URL
+    console.log('Request URL:', url, 'Options:', options);
+
+    try {
+        const words_response = await fetch(url, options); // Fetch API response
+        const proxy_said = await words_response.json(); // Parse response as JSON
+
+        console.log('Response for ' + targetLang + ':', proxy_said);
+
+        if (proxy_said.output.length === 0) {
+            feedback.html("Received empty response. Please try again.");
+            return null;
+        } else {
+            let translatedText = proxy_said.output.join(""); // Combine output text
+            return translatedText; // Return translated text for further processing
+        }
+
+    } catch (error) {
+        feedback.html("Error occurred while communicating with the API.");
+        console.error("Error fetching from proxy:", error);
+        return null;
+    }
+}
 
